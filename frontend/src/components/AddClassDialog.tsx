@@ -13,11 +13,20 @@ import {
 } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "-")
+    .replace(/[\s-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 interface AddClassDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (uri: string, label: string, description?: string) => void;
   isPending: boolean;
+  namespaceUri?: string;
 }
 
 export default function AddClassDialog({
@@ -25,10 +34,12 @@ export default function AddClassDialog({
   onOpenChange,
   onSubmit,
   isPending,
+  namespaceUri = "http://example.org/",
 }: AddClassDialogProps) {
   const [uri, setUri] = useState("");
   const [label, setLabel] = useState("");
   const [description, setDescription] = useState("");
+  const [uriTouched, setUriTouched] = useState(false);
 
   const handleSubmit = () => {
     if (!uri.trim() || !label.trim()) return;
@@ -36,6 +47,7 @@ export default function AddClassDialog({
     setUri("");
     setLabel("");
     setDescription("");
+    setUriTouched(false);
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -43,6 +55,7 @@ export default function AddClassDialog({
       setUri("");
       setLabel("");
       setDescription("");
+      setUriTouched(false);
     }
     onOpenChange(nextOpen);
   };
@@ -65,7 +78,15 @@ export default function AddClassDialog({
               id="add-class-uri"
               placeholder="e.g., http://example.org/MyClass"
               value={uri}
-              onChange={(e) => setUri(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setUri(value);
+                if (value === "") {
+                  setUriTouched(false);
+                } else {
+                  setUriTouched(true);
+                }
+              }}
               className="mt-1"
             />
           </div>
@@ -77,7 +98,14 @@ export default function AddClassDialog({
               id="add-class-label"
               placeholder="My Class"
               value={label}
-              onChange={(e) => setLabel(e.target.value)}
+              onChange={(e) => {
+                const newLabel = e.target.value;
+                setLabel(newLabel);
+                if (!uriTouched) {
+                  const slug = slugify(newLabel);
+                  setUri(slug ? `${namespaceUri}${slug}` : "");
+                }
+              }}
               className="mt-1"
             />
           </div>

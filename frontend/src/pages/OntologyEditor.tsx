@@ -377,6 +377,7 @@ export default function OntologyEditor() {
         onOpenChange={setAddClassDialogOpen}
         onSubmit={handleContextAddClass}
         isPending={addClass.isPending}
+        namespaceUri={ontology?.namespace_uri}
       />
     </div>
   );
