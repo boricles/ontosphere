@@ -22,6 +22,7 @@ import NodePanel from "@/components/NodePanel";
 import ProcessingOverlay from "@/components/ProcessingOverlay";
 import ConnectionBanner from "@/components/ConnectionBanner";
 import AddClassDialog from "@/components/AddClassDialog";
+import RelationshipPickerDialog from "@/components/RelationshipPickerDialog";
 import ValidationPanel from "@/components/ValidationPanel";
 import { Button } from "@/components/ui/button";
 import {
@@ -76,6 +77,7 @@ export default function OntologyEditor() {
     nodeUri: string;
     nodeLabel: string;
   } | null>(null);
+  const [pendingEdge, setPendingEdge] = useState<EdgeCreateEvent | null>(null);
 
   // WebSocket for live updates during processing
   const { lastMessage, connectionState, reconnectNow } = useWebSocket(ontologyId!);
@@ -103,6 +105,14 @@ export default function OntologyEditor() {
 
   const edges = useMemo(() => graphData?.edges ?? [], [graphData]);
 
+  const nodeLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const n of graphData?.nodes ?? []) {
+      map.set(n.id, n.label || n.uri || n.id);
+    }
+    return map;
+  }, [graphData]);
+
   // Callbacks
   const handleNodeSelect = useCallback(
     (nodeId: string | null) => {
@@ -119,19 +129,28 @@ export default function OntologyEditor() {
   }, [toggleEditMode]);
 
   const handleEdgeCreate = useCallback(
-    async (event: EdgeCreateEvent) => {
+    (event: EdgeCreateEvent) => {
+      setPendingEdge(event);
+    },
+    [],
+  );
+
+  const handleRelationshipSelect = useCallback(
+    async (relationshipType: string) => {
+      if (!pendingEdge) return;
       try {
         await addRelationship.mutateAsync({
-          source_uri: event.sourceUri,
-          target_uri: event.targetUri,
-          relationship_type: "RELATED_TO",
+          source_uri: pendingEdge.sourceUri,
+          target_uri: pendingEdge.targetUri,
+          relationship_type: relationshipType,
         });
         toast.success("Relationship created");
       } catch {
         toast.error("Failed to create relationship");
       }
+      setPendingEdge(null);
     },
-    [addRelationship],
+    [addRelationship, pendingEdge],
   );
 
   const handleSearchChange = useCallback(
@@ -377,6 +396,16 @@ export default function OntologyEditor() {
         onOpenChange={setAddClassDialogOpen}
         onSubmit={handleContextAddClass}
         isPending={addClass.isPending}
+      />
+
+      {/* Relationship Type Picker (drag-to-connect) */}
+      <RelationshipPickerDialog
+        open={pendingEdge !== null}
+        sourceLabel={pendingEdge ? (nodeLabels.get(pendingEdge.sourceId) ?? pendingEdge.sourceUri) : ""}
+        targetLabel={pendingEdge ? (nodeLabels.get(pendingEdge.targetId) ?? pendingEdge.targetUri) : ""}
+        onSelect={handleRelationshipSelect}
+        onCancel={() => setPendingEdge(null)}
+        isPending={addRelationship.isPending}
       />
     </div>
   );
