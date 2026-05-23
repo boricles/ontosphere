@@ -15,9 +15,11 @@ import {
   Download,
   Edit3,
   Eye,
+  Redo2,
   Save,
   Search,
   Clock,
+  Undo2,
 } from "lucide-react";
 import VersionHistory from "@/components/VersionHistory";
 
@@ -30,6 +32,12 @@ interface ToolbarProps {
   editMode: boolean;
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  undoDescription?: string;
+  redoDescription?: string;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -48,6 +56,12 @@ export default function Toolbar({
   editMode,
   searchQuery,
   onSearchChange,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
+  undoDescription,
+  redoDescription,
 }: ToolbarProps) {
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
 
@@ -94,6 +108,32 @@ export default function Toolbar({
             </>
           )}
         </Button>
+
+        {/* Undo / Redo (edit mode only) */}
+        {editMode && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onUndo}
+              disabled={!canUndo}
+              title={undoDescription ? `Undo: ${undoDescription}` : "Undo"}
+            >
+              <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+              Undo
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRedo}
+              disabled={!canRedo}
+              title={redoDescription ? `Redo: ${redoDescription}` : "Redo"}
+            >
+              <Redo2 className="mr-1.5 h-3.5 w-3.5" />
+              Redo
+            </Button>
+          </>
+        )}
 
         {/* Validate */}
         <Button variant="outline" size="sm" onClick={onValidate}>
