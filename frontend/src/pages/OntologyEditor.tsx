@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useOntology,
   useGraph,
@@ -11,6 +12,7 @@ import {
   useDeleteRelationship,
   useDeleteClass,
   useAddClass,
+  keys as queryKeys,
 } from "@/api/ontologies";
 import { useOntologyStore } from "@/store/ontologyStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
@@ -42,6 +44,7 @@ import { toast } from "sonner";
 export default function OntologyEditor() {
   const { id: ontologyId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const {
     selectedNodeId,
@@ -95,13 +98,16 @@ export default function OntologyEditor() {
       const status = lastMessage.payload?.status as string | undefined;
       if (status === "ready") {
         toast.success("Ontology processing complete!");
+        void queryClient.invalidateQueries({ queryKey: queryKeys.detail(ontologyId!) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.graph(ontologyId!) });
       }
       if (status === "error") {
         const msg = (lastMessage.payload?.message as string) ?? "Unknown error";
         toast.error(`Processing failed: ${msg}`);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.detail(ontologyId!) });
       }
     }
-  }, [lastMessage]);
+  }, [lastMessage, queryClient, ontologyId]);
 
   // Keyboard shortcuts for undo/redo
   useEffect(() => {

@@ -19,7 +19,7 @@ import type {
 // Query keys
 // ---------------------------------------------------------------------------
 
-const keys = {
+export const keys = {
   all: ["ontologies"] as const,
   detail: (id: string) => ["ontologies", id] as const,
   documents: (id: string) => ["ontologies", id, "documents"] as const,
