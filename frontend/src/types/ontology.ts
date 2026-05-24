@@ -115,3 +115,25 @@ export interface ImportResult {
   relationships_imported: number;
   message: string;
 }
+
+export interface NodeDiff {
+  uri: string;
+  label: string;
+  status: "added" | "removed" | "modified";
+  changes: Record<string, { old: string; new: string }>;
+}
+
+export interface EdgeDiff {
+  source_uri: string;
+  target_uri: string;
+  edge_type: string;
+  status: "added" | "removed";
+}
+
+export interface DiffResult {
+  from_version: number;
+  to_version: number;
+  nodes: NodeDiff[];
+  edges: EdgeDiff[];
+  summary: string;
+}

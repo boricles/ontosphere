@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.ontology import Ontology, OntologyVersion
 from app.schemas.common import StatusResponse
+from app.schemas.graph import DiffResult
 from app.schemas.ontology import OntologyVersionCreate, OntologyVersionRead
+from app.services.diff_service import compute_diff
 from app.services.ontology_service import create_version, list_versions, rollback_version
 
 logger = logging.getLogger(__name__)
@@ -135,3 +137,68 @@ async def rollback_ontology_version(
         status="ok",
         message=f"Rolled back to version {version.version_number}.",
     )
+
+
+@router.get(
+    "/{version_a_id}/diff/{version_b_id}",
+    response_model=DiffResult,
+    summary="Compare two versions",
+)
+async def diff_versions(
+    ontology_id: uuid.UUID,
+    version_a_id: uuid.UUID,
+    version_b_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+) -> DiffResult:
+    await _get_ontology_or_404(ontology_id, session)
+
+    # Load both versions
+    result_a = await session.execute(
+        select(OntologyVersion).where(
+            OntologyVersion.id == version_a_id,
+            OntologyVersion.ontology_id == ontology_id,
+        )
+    )
+    version_a = result_a.scalars().first()
+    if version_a is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Version {version_a_id} not found for ontology {ontology_id}.",
+        )
+
+    result_b = await session.execute(
+        select(OntologyVersion).where(
+            OntologyVersion.id == version_b_id,
+            OntologyVersion.ontology_id == ontology_id,
+        )
+    )
+    version_b = result_b.scalars().first()
+    if version_b is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Version {version_b_id} not found for ontology {ontology_id}.",
+        )
+
+    if not version_a.snapshot_jsonld or not version_b.snapshot_jsonld:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="One or both versions have no snapshot data.",
+        )
+
+    try:
+        return compute_diff(
+            version_a.snapshot_jsonld,
+            version_a.version_number,
+            version_b.snapshot_jsonld,
+            version_b.version_number,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to compute diff between versions %s and %s.",
+            version_a_id,
+            version_b_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to compute version diff.",
+        )

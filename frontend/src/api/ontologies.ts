@@ -12,6 +12,7 @@ import type {
   ValidationResult,
   OntologyVersion,
   TaskStatus,
+  DiffResult,
 } from "@/types/ontology";
 
 // ---------------------------------------------------------------------------
@@ -25,6 +26,8 @@ const keys = {
   graph: (id: string) => ["ontologies", id, "graph"] as const,
   status: (id: string) => ["ontologies", id, "status"] as const,
   versions: (id: string) => ["ontologies", id, "versions"] as const,
+  diff: (id: string, v1: string, v2: string) =>
+    ["ontologies", id, "versions", "diff", v1, v2] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -368,5 +371,22 @@ export function useRollbackVersion(ontologyId: string) {
       void qc.invalidateQueries({ queryKey: keys.graph(ontologyId) });
       void qc.invalidateQueries({ queryKey: keys.versions(ontologyId) });
     },
+  });
+}
+
+export function useVersionDiff(
+  ontologyId: string,
+  versionAId: string,
+  versionBId: string,
+) {
+  return useQuery<DiffResult>({
+    queryKey: keys.diff(ontologyId, versionAId, versionBId),
+    queryFn: async () => {
+      const { data } = await apiClient.get<DiffResult>(
+        `/ontologies/${ontologyId}/versions/${versionAId}/diff/${versionBId}`,
+      );
+      return data;
+    },
+    enabled: !!ontologyId && !!versionAId && !!versionBId,
   });
 }

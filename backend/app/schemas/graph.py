@@ -99,3 +99,36 @@ class ValidationResult(BaseModel):
     conforms: bool
     violations: list[ValidationViolation] = Field(default_factory=list)
     results_text: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Version diff
+# ---------------------------------------------------------------------------
+
+
+class NodeDiff(BaseModel):
+    """A single node change between two versions."""
+
+    uri: str
+    label: str
+    status: Literal["added", "removed", "modified"]
+    changes: dict = Field(default_factory=dict)
+
+
+class EdgeDiff(BaseModel):
+    """A single edge change between two versions."""
+
+    source_uri: str
+    target_uri: str
+    edge_type: str
+    status: Literal["added", "removed"]
+
+
+class DiffResult(BaseModel):
+    """Semantic diff between two ontology version snapshots."""
+
+    from_version: int
+    to_version: int
+    nodes: list[NodeDiff] = Field(default_factory=list)
+    edges: list[EdgeDiff] = Field(default_factory=list)
+    summary: str = ""

@@ -11,8 +11,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RotateCcw, Clock } from "lucide-react";
+import { Loader2, RotateCcw, Clock, GitCompareArrows } from "lucide-react";
 import { toast } from "sonner";
+import VersionDiffPanel from "@/components/VersionDiffPanel";
 
 interface VersionHistoryProps {
   ontologyId: string;
@@ -34,6 +35,9 @@ export default function VersionHistory({ ontologyId, open, onClose }: VersionHis
   const { data: versions, isLoading } = useVersions(ontologyId);
   const rollbackMutation = useRollbackVersion(ontologyId);
   const [confirmVersion, setConfirmVersion] = useState<OntologyVersion | null>(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
+  const [showDiff, setShowDiff] = useState(false);
 
   const handleRollback = async (version: OntologyVersion) => {
     try {
@@ -46,17 +50,72 @@ export default function VersionHistory({ ontologyId, open, onClose }: VersionHis
     }
   };
 
+  const toggleVersion = (versionId: string) => {
+    setSelectedVersions((prev) => {
+      if (prev.includes(versionId)) {
+        return prev.filter((id) => id !== versionId);
+      }
+      if (prev.length >= 2) return prev;
+      return [...prev, versionId];
+    });
+  };
+
+  const handleCompare = () => {
+    if (selectedVersions.length !== 2 || !versions) return;
+    // Sort so older version is "from"
+    const sorted = [...selectedVersions].sort((a, b) => {
+      const va = versions.find((v) => v.id === a);
+      const vb = versions.find((v) => v.id === b);
+      return (va?.version_number ?? 0) - (vb?.version_number ?? 0);
+    });
+    setSelectedVersions(sorted);
+    setShowDiff(true);
+  };
+
+  const exitCompareMode = () => {
+    setCompareMode(false);
+    setSelectedVersions([]);
+    setShowDiff(false);
+  };
+
+  // Sort so older version is "from" for the diff panel
+  const [diffFromId, diffToId] = selectedVersions;
+
   return (
     <>
-      <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <Dialog open={open && !showDiff} onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          exitCompareMode();
+          onClose();
+        }
+      }}>
         <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
               Version History
+              {versions && versions.length >= 2 && (
+                <Button
+                  variant={compareMode ? "default" : "outline"}
+                  size="sm"
+                  className="ml-auto h-7 text-xs"
+                  onClick={() => {
+                    if (compareMode) {
+                      exitCompareMode();
+                    } else {
+                      setCompareMode(true);
+                    }
+                  }}
+                >
+                  <GitCompareArrows className="mr-1 h-3.5 w-3.5" />
+                  Compare
+                </Button>
+              )}
             </DialogTitle>
             <DialogDescription>
-              View and rollback to previous versions of this ontology.
+              {compareMode
+                ? "Select two versions to compare."
+                : "View and rollback to previous versions of this ontology."}
             </DialogDescription>
           </DialogHeader>
 
@@ -74,34 +133,62 @@ export default function VersionHistory({ ontologyId, open, onClose }: VersionHis
           )}
 
           {!isLoading && versions && versions.length > 0 && (
-            <ul className="divide-y">
-              {versions.map((version) => (
-                <li key={version.version_number} className="flex items-center justify-between py-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">v{version.version_number}</Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDate(version.created_at)}
-                      </span>
-                    </div>
-                    {version.description && (
-                      <p className="mt-1 truncate text-sm text-muted-foreground">
-                        {version.description}
-                      </p>
-                    )}
-                  </div>
+            <>
+              <ul className="divide-y">
+                {versions.map((version) => {
+                  const isSelected = selectedVersions.includes(version.id);
+                  return (
+                    <li key={version.version_number} className="flex items-center justify-between py-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">v{version.version_number}</Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(version.created_at)}
+                          </span>
+                        </div>
+                        {version.description && (
+                          <p className="mt-1 truncate text-sm text-muted-foreground">
+                            {version.description}
+                          </p>
+                        )}
+                      </div>
+                      {compareMode ? (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={!isSelected && selectedVersions.length >= 2}
+                          onChange={() => toggleVersion(version.id)}
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setConfirmVersion(version)}
+                          disabled={rollbackMutation.isPending}
+                        >
+                          <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                          Rollback
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {compareMode && (
+                <div className="flex justify-end pt-2">
                   <Button
-                    variant="ghost"
                     size="sm"
-                    onClick={() => setConfirmVersion(version)}
-                    disabled={rollbackMutation.isPending}
+                    disabled={selectedVersions.length !== 2}
+                    onClick={handleCompare}
                   >
-                    <RotateCcw className="mr-1 h-3.5 w-3.5" />
-                    Rollback
+                    <GitCompareArrows className="mr-1 h-3.5 w-3.5" />
+                    Compare
                   </Button>
-                </li>
-              ))}
-            </ul>
+                </div>
+              )}
+            </>
           )}
         </DialogContent>
       </Dialog>
@@ -136,6 +223,17 @@ export default function VersionHistory({ ontologyId, open, onClose }: VersionHis
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Diff Panel */}
+      {showDiff && diffFromId && diffToId && (
+        <VersionDiffPanel
+          ontologyId={ontologyId}
+          versionAId={diffFromId}
+          versionBId={diffToId}
+          open={showDiff}
+          onClose={() => setShowDiff(false)}
+        />
+      )}
     </>
   );
 }
