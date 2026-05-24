@@ -9,7 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Loader2, ArrowLeft } from "lucide-react";
-import type { NodeDiff, EdgeDiff } from "@/types/ontology";
+import type { NodeDiff, EdgeDiff, BreakingChange } from "@/types/ontology";
 
 interface VersionDiffPanelProps {
   ontologyId: string;
@@ -79,6 +79,44 @@ function EdgeDiffRow({ edge }: { edge: EdgeDiff }) {
   );
 }
 
+function severityBadge(severity: "error" | "warning") {
+  if (severity === "error") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-200">
+        error
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+      warning
+    </span>
+  );
+}
+
+function BreakingChangeRow({ change }: { change: BreakingChange }) {
+  return (
+    <li className="flex flex-col gap-1 py-2">
+      <div className="flex items-start gap-2">
+        {severityBadge(change.severity)}
+        <span className="text-sm">{change.message}</span>
+      </div>
+      {change.affected_uris.length > 0 && (
+        <div className="ml-6 flex flex-wrap gap-1">
+          {change.affected_uris.map((uri) => (
+            <span
+              key={uri}
+              className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+            >
+              {localName(uri)}
+            </span>
+          ))}
+        </div>
+      )}
+    </li>
+  );
+}
+
 export default function VersionDiffPanel({
   ontologyId,
   versionAId,
@@ -123,6 +161,26 @@ export default function VersionDiffPanel({
 
         {diff && (
           <div className="space-y-4">
+            {/* Compatibility section */}
+            {diff.breaking_changes.length > 0 ? (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950">
+                <h3 className="text-sm font-semibold text-red-800 dark:text-red-200 mb-1">
+                  Compatibility Issues
+                </h3>
+                <ul className="divide-y divide-red-200 dark:divide-red-800">
+                  {diff.breaking_changes.map((change, i) => (
+                    <BreakingChangeRow key={i} change={change} />
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 dark:border-green-800 dark:bg-green-950">
+                <span className="text-sm text-green-800 dark:text-green-200">
+                  No compatibility issues
+                </span>
+              </div>
+            )}
+
             {/* Classes section */}
             <div>
               <h3 className="text-sm font-semibold mb-1">Classes</h3>

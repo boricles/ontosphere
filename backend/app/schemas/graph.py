@@ -124,6 +124,15 @@ class EdgeDiff(BaseModel):
     status: Literal["added", "removed"]
 
 
+class BreakingChange(BaseModel):
+    """A compatibility issue detected between two versions."""
+
+    severity: Literal["error", "warning"]
+    category: str
+    message: str
+    affected_uris: list[str] = Field(default_factory=list)
+
+
 class DiffResult(BaseModel):
     """Semantic diff between two ontology version snapshots."""
 
@@ -131,4 +140,5 @@ class DiffResult(BaseModel):
     to_version: int
     nodes: list[NodeDiff] = Field(default_factory=list)
     edges: list[EdgeDiff] = Field(default_factory=list)
+    breaking_changes: list[BreakingChange] = Field(default_factory=list)
     summary: str = ""

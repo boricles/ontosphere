@@ -130,10 +130,18 @@ export interface EdgeDiff {
   status: "added" | "removed";
 }
 
+export interface BreakingChange {
+  severity: "error" | "warning";
+  category: string;
+  message: string;
+  affected_uris: string[];
+}
+
 export interface DiffResult {
   from_version: number;
   to_version: number;
   nodes: NodeDiff[];
   edges: EdgeDiff[];
+  breaking_changes: BreakingChange[];
   summary: string;
 }

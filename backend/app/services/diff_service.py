@@ -10,7 +10,7 @@ import json
 import logging
 from typing import Any
 
-from app.schemas.graph import DiffResult, EdgeDiff, NodeDiff
+from app.schemas.graph import BreakingChange, DiffResult, EdgeDiff, NodeDiff
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +115,108 @@ def _extract_from_jsonld(jsonld_data: dict) -> tuple[list[dict], list[dict]]:
 # ---------------------------------------------------------------------------
 
 
+def _check_compatibility(
+    node_diffs: list[NodeDiff],
+    edge_diffs: list[EdgeDiff],
+    edges_a: list[dict],
+    map_a: dict[str, dict],
+    map_b: dict[str, dict],
+) -> list[BreakingChange]:
+    """Run compatibility checks on the diff and return breaking changes."""
+    changes: list[BreakingChange] = []
+
+    removed_uris = {n.uri for n in node_diffs if n.status == "removed"}
+
+    # Build lookup structures from the "from" snapshot edges
+    def edge_src_or_tgt(e: dict) -> tuple[str, str]:
+        src = e.get("source_uri", e.get("source", ""))
+        tgt = e.get("target_uri", e.get("target", ""))
+        return src, tgt
+
+    # ERROR: orphaned_edges — removed node had connected edges
+    for uri in sorted(removed_uris):
+        label = map_a.get(uri, {}).get("label", "") or uri
+        connected = sum(
+            1 for e in edges_a
+            if uri in edge_src_or_tgt(e)
+        )
+        if connected > 0:
+            changes.append(BreakingChange(
+                severity="error",
+                category="orphaned_edges",
+                message=f"Removed class '{label}' has {connected} connected relationship{'s' if connected != 1 else ''} that will be orphaned",
+                affected_uris=[uri],
+            ))
+
+    # ERROR: broken_hierarchy — removed node was target of SUBCLASS_OF
+    for uri in sorted(removed_uris):
+        label = map_a.get(uri, {}).get("label", "") or uri
+        subclasses = [
+            e for e in edges_a
+            if e.get("edge_type", "") == "SUBCLASS_OF"
+            and (e.get("target_uri", e.get("target", "")) == uri)
+        ]
+        if subclasses:
+            n = len(subclasses)
+            changes.append(BreakingChange(
+                severity="error",
+                category="broken_hierarchy",
+                message=f"Removed class '{label}' breaks the class hierarchy \u2014 {n} subclass{'es' if n != 1 else ''} lose their parent",
+                affected_uris=[uri],
+            ))
+
+    # WARNING: relationship_type_change — same source+target, different edge_type
+    edges_b_by_pair: dict[tuple[str, str], str] = {}
+    for ed in edge_diffs:
+        if ed.status == "added":
+            edges_b_by_pair[(ed.source_uri, ed.target_uri)] = ed.edge_type
+
+    for ed in edge_diffs:
+        if ed.status == "removed":
+            pair = (ed.source_uri, ed.target_uri)
+            if pair in edges_b_by_pair:
+                new_type = edges_b_by_pair[pair]
+                if new_type != ed.edge_type:
+                    src_label = map_b.get(pair[0], map_a.get(pair[0], {})).get("label", "") or pair[0]
+                    tgt_label = map_b.get(pair[1], map_a.get(pair[1], {})).get("label", "") or pair[1]
+                    changes.append(BreakingChange(
+                        severity="warning",
+                        category="relationship_type_change",
+                        message=f"Relationship between '{src_label}' and '{tgt_label}' changed from {ed.edge_type} to {new_type}",
+                        affected_uris=[pair[0], pair[1]],
+                    ))
+
+    # WARNING: high_impact_removal — more than 3 nodes removed
+    if len(removed_uris) > 3:
+        changes.append(BreakingChange(
+            severity="warning",
+            category="high_impact_removal",
+            message=f"Large-scale removal: {len(removed_uris)} classes deleted \u2014 review carefully",
+            affected_uris=sorted(removed_uris),
+        ))
+
+    # WARNING: property_domain_range_removed — removed node used as domain/range
+    property_edges_a = [
+        e for e in edges_a
+        if e.get("edge_type", "") in ("HAS_PROPERTY", "DOMAIN", "RANGE")
+    ]
+    for uri in sorted(removed_uris):
+        label = map_a.get(uri, {}).get("label", "") or uri
+        prop_refs = sum(
+            1 for e in property_edges_a
+            if uri in edge_src_or_tgt(e)
+        )
+        if prop_refs > 0:
+            changes.append(BreakingChange(
+                severity="warning",
+                category="property_domain_range_removed",
+                message=f"Removed class '{label}' was used as domain/range for {prop_refs} property definition{'s' if prop_refs != 1 else ''}",
+                affected_uris=[uri],
+            ))
+
+    return changes
+
+
 def compute_diff(
     snapshot_a: dict,
     version_a_num: int,
@@ -188,6 +290,11 @@ def compute_diff(
             source_uri=src, target_uri=tgt, edge_type=etype, status="removed",
         ))
 
+    # --- Compatibility checks ---
+    breaking_changes = _check_compatibility(
+        node_diffs, edge_diffs, edges_a, map_a, map_b,
+    )
+
     # --- Summary ---
     added_nodes = sum(1 for n in node_diffs if n.status == "added")
     removed_nodes = sum(1 for n in node_diffs if n.status == "removed")
@@ -212,10 +319,21 @@ def compute_diff(
     if summary:
         summary = summary[0].upper() + summary[1:]
 
+    if breaking_changes:
+        n_errors = sum(1 for bc in breaking_changes if bc.severity == "error")
+        n_warnings = sum(1 for bc in breaking_changes if bc.severity == "warning")
+        bc_parts: list[str] = []
+        if n_errors:
+            bc_parts.append(f"{n_errors} error{'s' if n_errors != 1 else ''}")
+        if n_warnings:
+            bc_parts.append(f"{n_warnings} warning{'s' if n_warnings != 1 else ''}")
+        summary += f" Compatibility: {', '.join(bc_parts)}."
+
     return DiffResult(
         from_version=version_a_num,
         to_version=version_b_num,
         nodes=node_diffs,
         edges=edge_diffs,
+        breaking_changes=breaking_changes,
         summary=summary,
     )
