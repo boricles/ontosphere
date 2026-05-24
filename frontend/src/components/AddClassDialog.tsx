@@ -71,6 +71,25 @@ export default function AddClassDialog({
         </DialogHeader>
         <div className="space-y-3 py-2">
           <div>
+            <Label htmlFor="add-class-label" className="text-xs">
+              Label <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="add-class-label"
+              placeholder="My Class"
+              value={label}
+              onChange={(e) => {
+                const newLabel = e.target.value;
+                setLabel(newLabel);
+                if (!uriTouched) {
+                  const slug = slugify(newLabel);
+                  setUri(slug ? `${namespaceUri}${slug}` : "");
+                }
+              }}
+              className="mt-1"
+            />
+          </div>
+          <div>
             <Label htmlFor="add-class-uri" className="text-xs">
               URI <span className="text-destructive">*</span>
             </Label>
@@ -89,25 +108,9 @@ export default function AddClassDialog({
               }}
               className="mt-1"
             />
-          </div>
-          <div>
-            <Label htmlFor="add-class-label" className="text-xs">
-              Label <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="add-class-label"
-              placeholder="My Class"
-              value={label}
-              onChange={(e) => {
-                const newLabel = e.target.value;
-                setLabel(newLabel);
-                if (!uriTouched) {
-                  const slug = slugify(newLabel);
-                  setUri(slug ? `${namespaceUri}${slug}` : "");
-                }
-              }}
-              className="mt-1"
-            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Auto-generated from label. Edit to override.
+            </p>
           </div>
           <div>
             <Label htmlFor="add-class-desc" className="text-xs">
