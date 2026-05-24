@@ -107,3 +107,11 @@ export interface TaskStatus {
   progress: number;
   message: string;
 }
+
+export interface ImportResult {
+  status: string;
+  classes_imported: number;
+  properties_imported: number;
+  relationships_imported: number;
+  message: string;
+}

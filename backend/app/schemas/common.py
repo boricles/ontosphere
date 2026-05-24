@@ -31,3 +31,13 @@ class PaginatedResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ImportResult(BaseModel):
+    """Result of a synchronous RDF import operation."""
+
+    status: str
+    classes_imported: int
+    properties_imported: int
+    relationships_imported: int
+    message: str = ""

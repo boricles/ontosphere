@@ -12,6 +12,7 @@ from app.api.documents import router as documents_router
 from app.api.events import router as events_router
 from app.api.export import router as export_router
 from app.api.graph import router as graph_router
+from app.api.import_rdf import router as import_router
 from app.api.ontologies import router as ontologies_router
 from app.api.processing import router as processing_router
 from app.api.validation import router as validation_router
@@ -25,6 +26,7 @@ api_router.include_router(ontologies_router)
 # Nested under /ontologies/{ontology_id}
 api_router.include_router(documents_router)
 api_router.include_router(processing_router)
+api_router.include_router(import_router)
 api_router.include_router(graph_router)
 api_router.include_router(export_router)
 api_router.include_router(validation_router)

@@ -3,13 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { useCreateOntology } from "@/api/ontologies";
 import apiClient from "@/api/client";
-import type { OntologyCreate } from "@/types/ontology";
+import type { OntologyCreate, ImportResult } from "@/types/ontology";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Brain, ChevronRight, FileText, Loader2, Play, XCircle } from "lucide-react";
+import { Brain, ChevronRight, FileText, Import, Loader2, Play, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const ACCEPTED_TYPES: Record<string, string[]> = {
@@ -17,6 +17,13 @@ const ACCEPTED_TYPES: Record<string, string[]> = {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
   "text/plain": [".txt"],
   "text/markdown": [".md"],
+};
+
+const IMPORT_ACCEPTED_TYPES: Record<string, string[]> = {
+  "text/turtle": [".ttl"],
+  "application/rdf+xml": [".owl", ".rdf"],
+  "application/ld+json": [".jsonld"],
+  "application/json": [".json"],
 };
 
 function formatFileSize(bytes: number): string {
@@ -72,8 +79,10 @@ export default function NewOntologyWizard() {
   const [description, setDescription] = useState("");
   const [namespaceUri, setNamespaceUri] = useState("http://ontosphere.io/ontologies/");
 
-  // Step 2: Documents
+  // Step 2: Documents / Import
   const [files, setFiles] = useState<File[]>([]);
+  const [importMode, setImportMode] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setFiles((prev) => [...prev, ...acceptedFiles]);
@@ -87,6 +96,20 @@ export default function NewOntologyWizard() {
     onDrop,
     accept: ACCEPTED_TYPES,
     multiple: true,
+  });
+
+  const onImportDrop = useCallback((accepted: File[]) => {
+    if (accepted[0]) setImportFile(accepted[0]);
+  }, []);
+
+  const {
+    getRootProps: getImportRootProps,
+    getInputProps: getImportInputProps,
+    isDragActive: isImportDragActive,
+  } = useDropzone({
+    onDrop: onImportDrop,
+    accept: IMPORT_ACCEPTED_TYPES,
+    multiple: false,
   });
 
   const canProceedStep1 = name.trim().length > 0 && namespaceUri.trim().length > 0;
@@ -104,23 +127,42 @@ export default function NewOntologyWizard() {
       const created = await createOntology.mutateAsync(ontologyData);
       toast.success("Ontology created");
 
-      // 2. Upload documents (using apiClient directly since ontologyId is dynamic)
-      if (files.length > 0) {
-        toast.info(`Uploading ${files.length} document(s)...`);
+      if (importMode) {
+        // Import path: upload RDF file directly
+        if (!importFile) {
+          toast.error("Please select an ontology file to import.");
+          return;
+        }
+        toast.info("Importing ontology...");
         const formData = new FormData();
-        files.forEach((file) => formData.append("files", file));
-        await apiClient.post(`/ontologies/${created.id}/documents`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        toast.success("Documents uploaded");
+        formData.append("file", importFile);
+        const { data: result } = await apiClient.post<ImportResult>(
+          `/ontologies/${created.id}/import`,
+          formData,
+          { headers: { "Content-Type": "multipart/form-data" } },
+        );
+        toast.success(
+          `Imported ${result.classes_imported} classes, ` +
+          `${result.properties_imported} properties, ` +
+          `${result.relationships_imported} relationships.`,
+        );
+      } else {
+        // Generate path: upload documents then start LLM processing
+        if (files.length > 0) {
+          toast.info(`Uploading ${files.length} document(s)...`);
+          const formData = new FormData();
+          files.forEach((file) => formData.append("files", file));
+          await apiClient.post(`/ontologies/${created.id}/documents`, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+          toast.success("Documents uploaded");
+        }
+        toast.info("Starting processing pipeline...");
+        await apiClient.post(`/ontologies/${created.id}/process`);
+        toast.success("Processing started");
       }
 
-      // 3. Start processing
-      toast.info("Starting processing pipeline...");
-      await apiClient.post(`/ontologies/${created.id}/process`);
-      toast.success("Processing started");
-
-      // 4. Navigate to the editor
+      // Navigate to the editor
       navigate(`/ontologies/${created.id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "An error occurred";
@@ -192,70 +234,144 @@ export default function NewOntologyWizard() {
           </Card>
         )}
 
-        {/* Step 2: Documents */}
+        {/* Step 2: Documents / Import */}
         {step === 1 && (
           <Card>
             <CardContent className="space-y-6 p-6">
-              <div
-                {...getRootProps()}
-                className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-10 transition-colors ${
-                  isDragActive
-                    ? "border-primary bg-primary/5"
-                    : "border-muted-foreground/25 hover:border-primary/50"
-                }`}
-              >
-                <input {...getInputProps()} />
-                <FileText className="h-10 w-10 text-muted-foreground/50" />
-                {isDragActive ? (
-                  <p className="mt-3 text-sm text-primary">Drop files here...</p>
-                ) : (
-                  <>
-                    <p className="mt-3 text-sm font-medium">
-                      Drag & drop files here, or click to browse
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Supports PDF, DOCX, TXT, and Markdown files
-                    </p>
-                  </>
-                )}
+              {/* Mode toggle */}
+              <div className="flex gap-2">
+                <Button
+                  variant={importMode ? "outline" : "default"}
+                  size="sm"
+                  onClick={() => setImportMode(false)}
+                >
+                  Generate from documents
+                </Button>
+                <Button
+                  variant={importMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setImportMode(true)}
+                >
+                  Import existing ontology
+                </Button>
               </div>
 
-              {files.length > 0 && (
-                <div>
-                  <h3 className="mb-2 text-sm font-medium">
-                    Uploaded Files ({files.length})
-                  </h3>
-                  <ul className="divide-y rounded-lg border">
-                    {files.map((file, index) => (
-                      <li
-                        key={`${file.name}-${index}`}
-                        className="flex items-center justify-between px-4 py-2.5"
-                      >
-                        <div className="flex items-center gap-2 overflow-hidden">
-                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <span className="truncate text-sm">{file.name}</span>
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            ({formatFileSize(file.size)})
-                          </span>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeFile(index)}
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              {!importMode ? (
+                <>
+                  {/* Document dropzone (existing) */}
+                  <div
+                    {...getRootProps()}
+                    className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-10 transition-colors ${
+                      isDragActive
+                        ? "border-primary bg-primary/5"
+                        : "border-muted-foreground/25 hover:border-primary/50"
+                    }`}
+                  >
+                    <input {...getInputProps()} />
+                    <FileText className="h-10 w-10 text-muted-foreground/50" />
+                    {isDragActive ? (
+                      <p className="mt-3 text-sm text-primary">Drop files here...</p>
+                    ) : (
+                      <>
+                        <p className="mt-3 text-sm font-medium">
+                          Drag & drop files here, or click to browse
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Supports PDF, DOCX, TXT, and Markdown files
+                        </p>
+                      </>
+                    )}
+                  </div>
 
-              {files.length === 0 && (
-                <p className="text-center text-sm text-muted-foreground">
-                  No files added yet. You can also skip this step and upload documents later.
-                </p>
+                  {files.length > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-sm font-medium">
+                        Uploaded Files ({files.length})
+                      </h3>
+                      <ul className="divide-y rounded-lg border">
+                        {files.map((file, index) => (
+                          <li
+                            key={`${file.name}-${index}`}
+                            className="flex items-center justify-between px-4 py-2.5"
+                          >
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              <span className="truncate text-sm">{file.name}</span>
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                ({formatFileSize(file.size)})
+                              </span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeFile(index)}
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {files.length === 0 && (
+                    <p className="text-center text-sm text-muted-foreground">
+                      No files added yet. You can also skip this step and upload documents later.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Import dropzone */}
+                  <div
+                    {...getImportRootProps()}
+                    className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-10 transition-colors ${
+                      isImportDragActive
+                        ? "border-primary bg-primary/5"
+                        : "border-muted-foreground/25 hover:border-primary/50"
+                    }`}
+                  >
+                    <input {...getImportInputProps()} />
+                    <Import className="h-10 w-10 text-muted-foreground/50" />
+                    {isImportDragActive ? (
+                      <p className="mt-3 text-sm text-primary">Drop ontology file here...</p>
+                    ) : (
+                      <>
+                        <p className="mt-3 text-sm font-medium">
+                          Drag & drop an ontology file, or click to browse
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Supports Turtle (.ttl), OWL/RDF-XML (.owl, .rdf), and JSON-LD (.jsonld)
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  {importFile ? (
+                    <div className="flex items-center justify-between rounded-lg border px-4 py-2.5">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate text-sm">{importFile.name}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          ({formatFileSize(importFile.size)})
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setImportFile(null)}
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-center text-sm text-muted-foreground">
+                      Select an existing ontology file to import.
+                    </p>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -287,28 +403,52 @@ export default function NewOntologyWizard() {
 
               <hr />
 
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">
-                  Documents ({files.length})
-                </h3>
-                {files.length > 0 ? (
-                  <ul className="mt-2 space-y-1">
-                    {files.map((file, index) => (
-                      <li key={`${file.name}-${index}`} className="flex items-center gap-2 text-sm">
-                        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span>{file.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          ({formatFileSize(file.size)})
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    No documents. Processing will create an empty ontology scaffold.
+              {importMode ? (
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    Import File
+                  </h3>
+                  {importFile ? (
+                    <div className="mt-2 flex items-center gap-2 text-sm">
+                      <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{importFile.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        ({formatFileSize(importFile.size)})
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      No file selected.
+                    </p>
+                  )}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    The graph will be imported directly. No LLM processing.
                   </p>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    Documents ({files.length})
+                  </h3>
+                  {files.length > 0 ? (
+                    <ul className="mt-2 space-y-1">
+                      {files.map((file, index) => (
+                        <li key={`${file.name}-${index}`} className="flex items-center gap-2 text-sm">
+                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>{file.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({formatFileSize(file.size)})
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      No documents. Processing will create an empty ontology scaffold.
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -337,6 +477,11 @@ export default function NewOntologyWizard() {
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creating...
+                </>
+              ) : importMode ? (
+                <>
+                  <Import className="mr-2 h-4 w-4" />
+                  Create & Import
                 </>
               ) : (
                 <>
