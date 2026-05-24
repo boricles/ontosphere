@@ -8,13 +8,12 @@ OntoSphere is an open-source tool that extracts structured ontologies from unstr
 
 ---
 
-## What's New in v0.2.0
+## What's New in v0.3.0
 
-- **Visual graph editing** -- drag-to-connect edges between classes, right-click context menus on nodes and canvas
-- **Edit mode toggle** -- switch between Viewing and Editing modes from the toolbar
-- **Add classes and relationships visually** -- no scripts, no config files
-- **Robust WebSocket reconnection** -- exponential backoff with dormant mode and manual retry button
-- **Connection status banner** -- non-intrusive indicator when live updates are unavailable
+- **Auto-generate class URIs from labels** -- typing a label auto-fills the URI with a slugified version; fully editable for manual override
+- **Relationship type picker** -- after drag-to-connect, choose from SUBCLASS_OF, HAS_PROPERTY, RELATED_TO, EQUIVALENT_TO, DISJOINT_WITH, or enter a custom type
+- **Undo/redo for graph editing** -- toolbar buttons and Ctrl+Z / Ctrl+Shift+Z keyboard shortcuts; supports add class, delete class, and add relationship
+- **Import existing ontology** -- new option in the Create Ontology wizard to import .ttl, .owl, .rdf, .jsonld files directly using rdflib, as an alternative to generating from documents
 
 ## Features
 
@@ -35,6 +34,10 @@ Toggle edit mode to modify your ontology directly on the graph canvas. Right-cli
   <img src="docs/screenshots/add-relationship-dialog.png" alt="Add Relationship dialog" width="48%">
   <img src="docs/screenshots/ontology-detail.png" alt="Ontology editor detail view" width="48%">
 </p>
+
+### Import Existing Ontologies
+
+Already have an ontology? Import it directly. The Create Ontology wizard offers an "Import existing ontology" mode that accepts Turtle (.ttl), OWL/RDF-XML (.owl, .rdf), and JSON-LD (.jsonld) files. The backend parses them with rdflib, extracting classes, properties, and relationships into the graph -- no LLM processing needed.
 
 ### Ontology Browser
 
@@ -220,12 +223,14 @@ cd backend && pytest -v
 - [x] Docker Compose orchestration
 - [x] Robust WebSocket reconnect with dormant mode
 - [x] Visual graph editing (drag-to-connect, context menus)
-- [ ] Auto-generate class URIs from labels
-- [ ] Relationship type picker in drag-to-connect flow
-- [ ] Undo/redo for graph editing operations
+- [x] Auto-generate class URIs from labels
+- [x] Relationship type picker in drag-to-connect flow
+- [x] Undo/redo for graph editing operations
+- [x] Import existing ontology files (.ttl, .owl, .rdf, .jsonld)
 - [ ] SHACL violation visualization in graph editor
+- [ ] Ontology CI / agent-behavior dry-run (git-style diff, schema-registry compatibility checks, dry-run replay)
+- [ ] Collaborative editing
 - [ ] Authentication and authorization (OAuth 2.0 / OIDC)
-- [ ] Multi-user / multi-tenant support
 
 ## Contributing
 
