@@ -80,7 +80,7 @@ Return a JSON object with three keys:
 - "classes": array of {uri, label, description, parent} objects
 - "properties": array of {uri, label, domain, range, description} objects
 - "relationships": array of {source_uri, target_uri, type} where type is one of:
-  SUBCLASS_OF, HAS_PROPERTY, DOMAIN, RANGE, EQUIVALENT_TO, RELATES_TO
+  SUBCLASS_OF, HAS_PROPERTY, DOMAIN, RANGE, EQUIVALENT_TO, RELATED_TO, DISJOINT_WITH
 
 Make sure every class referenced in a property's domain/range actually appears in the classes list.
 

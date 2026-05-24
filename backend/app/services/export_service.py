@@ -153,12 +153,14 @@ def _export_rdf(
             g.add((source, OWL.hasKey, target))
         elif edge_type == "EQUIVALENT_TO":
             g.add((source, OWL.equivalentClass, target))
-        elif edge_type == "RELATES_TO":
+        elif edge_type == "RELATED_TO":
             # Generic relationship -- create an object property assertion
-            rel_uri = _resolve_uri(edge.label or "relatesTo", NS)
+            rel_uri = _resolve_uri(edge.label or "relatedTo", NS)
             g.add((rel_uri, RDF.type, OWL.ObjectProperty))
             g.add((rel_uri, RDFS.domain, source))
             g.add((rel_uri, RDFS.range, target))
+        elif edge_type == "DISJOINT_WITH":
+            g.add((source, OWL.disjointWith, target))
         else:
             # Custom relationship type -- model as an object property
             rel_uri = _resolve_uri(edge.label or edge.edge_type, NS)

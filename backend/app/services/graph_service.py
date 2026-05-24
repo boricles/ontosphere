@@ -386,25 +386,12 @@ class GraphService:
     ) -> None:
         """Create a typed edge between two nodes.
 
-        The *rel_type* must be one of the known AGE edge labels:
-        SUBCLASS_OF, HAS_PROPERTY, DOMAIN, RANGE, EQUIVALENT_TO, RELATES_TO.
+        Any alphanumeric/underscore relationship type is accepted.
+        The type is sanitized (uppercased, special chars replaced with
+        underscores) before being used as a Cypher edge label.
         """
         name = cls.graph_name(ontology_id)
         safe_type = _sanitize_rel_type(rel_type)
-
-        valid_types = {
-            "SUBCLASS_OF",
-            "HAS_PROPERTY",
-            "DOMAIN",
-            "RANGE",
-            "EQUIVALENT_TO",
-            "RELATES_TO",
-        }
-        if safe_type not in valid_types:
-            raise ValueError(
-                f"Invalid relationship type '{rel_type}' (sanitized: '{safe_type}'). "
-                f"Must be one of {valid_types}"
-            )
 
         cypher = (
             f"MATCH (a {{uri: $source_uri}}), (b {{uri: $target_uri}}) "
@@ -440,20 +427,6 @@ class GraphService:
         """Delete a specific edge between two nodes."""
         name = cls.graph_name(ontology_id)
         safe_type = _sanitize_rel_type(rel_type)
-
-        valid_types = {
-            "SUBCLASS_OF",
-            "HAS_PROPERTY",
-            "DOMAIN",
-            "RANGE",
-            "EQUIVALENT_TO",
-            "RELATES_TO",
-        }
-        if safe_type not in valid_types:
-            raise ValueError(
-                f"Invalid relationship type '{rel_type}' (sanitized: '{safe_type}'). "
-                f"Must be one of {valid_types}"
-            )
 
         cypher = (
             f"MATCH (a {{uri: $source_uri}})-[r:{safe_type}]->(b {{uri: $target_uri}}) "

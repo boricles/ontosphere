@@ -388,6 +388,18 @@ async def _rebuild_from_jsonld(
                 session, ontology_id, str(subj), str(obj), "SUBCLASS_OF",
             )
 
+        # Extract equivalentClass relationships
+        for subj, obj in g.subject_objects(OWL.equivalentClass):
+            await GraphService.add_relationship(
+                session, ontology_id, str(subj), str(obj), "EQUIVALENT_TO",
+            )
+
+        # Extract disjointWith relationships
+        for subj, obj in g.subject_objects(OWL.disjointWith):
+            await GraphService.add_relationship(
+                session, ontology_id, str(subj), str(obj), "DISJOINT_WITH",
+            )
+
         # Extract properties
         for subj in g.subjects(RDF.type, OWL.ObjectProperty):
             uri = str(subj)

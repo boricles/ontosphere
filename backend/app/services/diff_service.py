@@ -82,6 +82,16 @@ def _extract_from_jsonld(jsonld_data: dict) -> tuple[list[dict], list[dict]]:
             "edge_type": "EQUIVALENT_TO",
         })
 
+    # --- disjointWith relationships ---
+    for subj, obj in g.subject_objects(OWL.disjointWith):
+        if isinstance(subj, BNode) or isinstance(obj, BNode):
+            continue
+        edges.append({
+            "source_uri": str(subj),
+            "target_uri": str(obj),
+            "edge_type": "DISJOINT_WITH",
+        })
+
     # --- ObjectProperty nodes ---
     for subj in g.subjects(RDF.type, OWL.ObjectProperty):
         if isinstance(subj, BNode):

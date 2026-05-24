@@ -194,7 +194,21 @@ async def import_rdf(
                 "Skipping equivalentClass %s -> %s", subj, obj, exc_info=True,
             )
 
-    # --- Pass 5: Properties (ObjectProperty, DatatypeProperty, AnnotationProperty) ---
+    # --- Pass 5: owl:disjointWith relationships ---
+    for subj, obj in g.subject_objects(OWL.disjointWith):
+        if isinstance(subj, BNode) or isinstance(obj, BNode):
+            continue
+        try:
+            await GraphService.add_relationship(
+                session, ontology_id, str(subj), str(obj), "DISJOINT_WITH",
+            )
+            rel_count += 1
+        except Exception:
+            logger.debug(
+                "Skipping disjointWith %s -> %s", subj, obj, exc_info=True,
+            )
+
+    # --- Pass 6: Properties (ObjectProperty, DatatypeProperty, AnnotationProperty) ---
     property_rdf_types = [OWL.ObjectProperty, OWL.DatatypeProperty, OWL.AnnotationProperty]
     seen_props: set[str] = set()
     for rdf_type in property_rdf_types:
