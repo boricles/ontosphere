@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   useOntology,
@@ -8,6 +8,7 @@ import {
   useCreateVersion,
   useOntologyStatus,
   useAddRelationship,
+  useDeleteRelationship,
   useDeleteClass,
   useAddClass,
 } from "@/api/ontologies";
@@ -23,6 +24,7 @@ import ProcessingOverlay from "@/components/ProcessingOverlay";
 import ConnectionBanner from "@/components/ConnectionBanner";
 import AddClassDialog from "@/components/AddClassDialog";
 import RelationshipPickerDialog from "@/components/RelationshipPickerDialog";
+import { useUndoRedo } from "@/hooks/useUndoRedo";
 import ValidationPanel from "@/components/ValidationPanel";
 import { Button } from "@/components/ui/button";
 import {
@@ -67,8 +69,12 @@ export default function OntologyEditor() {
   const validateOntology = useValidateOntology(ontologyId!);
   const createVersion = useCreateVersion(ontologyId!);
   const addRelationship = useAddRelationship(ontologyId!);
+  const deleteRelationship = useDeleteRelationship(ontologyId!);
   const deleteClass = useDeleteClass(ontologyId!);
   const addClass = useAddClass(ontologyId!);
+
+  const { pushAction, undo, redo, canUndo, canRedo, undoDescription, redoDescription } =
+    useUndoRedo();
 
   // State for context menu actions
   const [addClassDialogOpen, setAddClassDialogOpen] = useState(false);
@@ -97,6 +103,27 @@ export default function OntologyEditor() {
     }
   }, [lastMessage]);
 
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    if (!editMode) return;
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      if (e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        void undo();
+      } else if (e.key.toLowerCase() === "z" && e.shiftKey) {
+        e.preventDefault();
+        void redo();
+      } else if (e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        void redo();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [editMode, undo, redo]);
+
   // Find the selected node from graph data
   const selectedNode: GraphNode | null = useMemo(() => {
     if (!selectedNodeId || !graphData?.nodes) return null;
@@ -112,6 +139,9 @@ export default function OntologyEditor() {
     }
     return map;
   }, [graphData]);
+
+  const graphDataRef = useRef(graphData);
+  graphDataRef.current = graphData;
 
   // Callbacks
   const handleNodeSelect = useCallback(
@@ -138,19 +168,38 @@ export default function OntologyEditor() {
   const handleRelationshipSelect = useCallback(
     async (relationshipType: string) => {
       if (!pendingEdge) return;
+      const payload = {
+        source_uri: pendingEdge.sourceUri,
+        target_uri: pendingEdge.targetUri,
+        relationship_type: relationshipType,
+      };
+      const { sourceId, targetId } = pendingEdge;
       try {
-        await addRelationship.mutateAsync({
-          source_uri: pendingEdge.sourceUri,
-          target_uri: pendingEdge.targetUri,
-          relationship_type: relationshipType,
-        });
+        await addRelationship.mutateAsync(payload);
         toast.success("Relationship created");
+        pushAction({
+          type: "ADD_RELATIONSHIP",
+          doAction: async () => {
+            await addRelationship.mutateAsync(payload);
+          },
+          undoAction: async () => {
+            const edges = graphDataRef.current?.edges ?? [];
+            const edge = edges.find(
+              (e) =>
+                e.source === sourceId &&
+                e.target === targetId &&
+                e.edge_type === relationshipType,
+            );
+            if (edge) await deleteRelationship.mutateAsync(edge.id);
+          },
+          description: `Add Relationship '${relationshipType}'`,
+        });
       } catch {
         toast.error("Failed to create relationship");
       }
       setPendingEdge(null);
     },
-    [addRelationship, pendingEdge],
+    [addRelationship, deleteRelationship, pendingEdge, pushAction],
   );
 
   const handleSearchChange = useCallback(
@@ -190,16 +239,34 @@ export default function OntologyEditor() {
   // Context menu action handlers
   const handleContextDeleteNode = useCallback(
     async (nodeUri: string) => {
+      const node = graphDataRef.current?.nodes.find((n) => n.uri === nodeUri);
+      const capturedLabel = node?.label ?? "";
+      const capturedDescription = node?.description ?? "";
+
       try {
         await deleteClass.mutateAsync(nodeUri);
         toast.success("Node deleted");
         setSelectedNode(null);
         setDeleteConfirm(null);
+        pushAction({
+          type: "DELETE_CLASS",
+          doAction: async () => {
+            await deleteClass.mutateAsync(nodeUri);
+          },
+          undoAction: async () => {
+            await addClass.mutateAsync({
+              uri: nodeUri,
+              label: capturedLabel,
+              description: capturedDescription || undefined,
+            });
+          },
+          description: `Delete Class '${capturedLabel}'`,
+        });
       } catch {
         toast.error("Failed to delete node");
       }
     },
-    [deleteClass, setSelectedNode],
+    [deleteClass, addClass, setSelectedNode, pushAction],
   );
 
   const handleContextAddClass = useCallback(
@@ -208,11 +275,21 @@ export default function OntologyEditor() {
         await addClass.mutateAsync({ uri, label, description });
         toast.success("Class added");
         setAddClassDialogOpen(false);
+        pushAction({
+          type: "ADD_CLASS",
+          doAction: async () => {
+            await addClass.mutateAsync({ uri, label, description });
+          },
+          undoAction: async () => {
+            await deleteClass.mutateAsync(uri);
+          },
+          description: `Add Class '${label}'`,
+        });
       } catch {
         toast.error("Failed to add class");
       }
     },
-    [addClass],
+    [addClass, deleteClass, pushAction],
   );
 
   const menuActions: GraphMenuActions = useMemo(
@@ -285,6 +362,12 @@ export default function OntologyEditor() {
         editMode={editMode}
         searchQuery={searchQuery}
         onSearchChange={handleSearchChange}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        undoDescription={undoDescription}
+        redoDescription={redoDescription}
       />
 
       {/* Main Content Area */}
