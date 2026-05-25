@@ -91,20 +91,36 @@ export default function OntologyEditor() {
   // WebSocket for live updates during processing
   const { lastMessage, connectionState, reconnectNow } = useWebSocket(ontologyId!);
 
-  // Handle WebSocket messages for status updates
+  // Detect processing completion via HTTP polling (works without WebSocket)
+  const prevTaskStatusRef = useRef<string | undefined>();
+  useEffect(() => {
+    const current = taskStatus?.status;
+    const prev = prevTaskStatusRef.current;
+    prevTaskStatusRef.current = current;
+
+    if (!current || current === prev) return;
+
+    if (current === "ready") {
+      toast.success("Ontology processing complete!");
+      void queryClient.invalidateQueries({ queryKey: queryKeys.detail(ontologyId!) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.graph(ontologyId!) });
+    } else if (current === "error") {
+      const msg = taskStatus?.message ?? "Unknown error";
+      toast.error(`Processing failed: ${msg}`);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.detail(ontologyId!) });
+    }
+  }, [taskStatus?.status, taskStatus?.message, queryClient, ontologyId]);
+
+  // Handle WebSocket messages — fast-path invalidation (toast handled by polling effect)
   useEffect(() => {
     if (!lastMessage) return;
     if (lastMessage.type === "status_update") {
       const status = lastMessage.payload?.status as string | undefined;
-      if (status === "ready") {
-        toast.success("Ontology processing complete!");
+      if (status === "ready" || status === "error") {
         void queryClient.invalidateQueries({ queryKey: queryKeys.detail(ontologyId!) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.graph(ontologyId!) });
-      }
-      if (status === "error") {
-        const msg = (lastMessage.payload?.message as string) ?? "Unknown error";
-        toast.error(`Processing failed: ${msg}`);
-        void queryClient.invalidateQueries({ queryKey: queryKeys.detail(ontologyId!) });
+        if (status === "ready") {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.graph(ontologyId!) });
+        }
       }
     }
   }, [lastMessage, queryClient, ontologyId]);
