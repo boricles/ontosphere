@@ -237,6 +237,8 @@ export default function GraphViewer({
   }, [elements]);
 
   // Toggle edit-mode tools (connection tool + context menu)
+  // Re-run when elements change because the Cytoscape instance (and tools)
+  // are recreated — the new tools start disabled and need re-enabling.
   useEffect(() => {
     const connTool = connectionToolRef.current;
     const ctxMenu = contextMenuRef.current;
@@ -248,7 +250,7 @@ export default function GraphViewer({
       connTool?.disable();
       ctxMenu?.disable();
     }
-  }, [editMode]);
+  }, [editMode, elements]);
 
   // Handle external node selection
   useEffect(() => {
