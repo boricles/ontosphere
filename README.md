@@ -8,12 +8,12 @@ OntoSphere is an open-source tool that extracts structured ontologies from unstr
 
 ---
 
-## What's New in v0.3.0
+## What's New in v0.4.0
 
-- **Auto-generate class URIs from labels** -- typing a label auto-fills the URI with a slugified version; fully editable for manual override
-- **Relationship type picker** -- after drag-to-connect, choose from SUBCLASS_OF, HAS_PROPERTY, RELATED_TO, EQUIVALENT_TO, DISJOINT_WITH, or enter a custom type
-- **Undo/redo for graph editing** -- toolbar buttons and Ctrl+Z / Ctrl+Shift+Z keyboard shortcuts; supports add class, delete class, and add relationship
-- **Import existing ontology** -- new option in the Create Ontology wizard to import .ttl, .owl, .rdf, .jsonld files directly using rdflib, as an alternative to generating from documents
+- **Semantic diff between versions** -- compare any two ontology versions side-by-side; see added, removed, and modified classes and relationships with colored indicators
+- **Compatibility checks** -- automatic detection of breaking changes: orphaned edges, broken hierarchies, relationship type mutations, high-impact removals, and domain/range violations
+- **Version comparison UI** -- select two versions via checkboxes in Version History and click Compare
+- **Flexible relationship types** -- any custom relationship type is now accepted; fixed RELATED_TO/RELATES_TO mismatch and added DISJOINT_WITH support across import/export/diff/rollback
 
 ## Features
 
@@ -227,8 +227,11 @@ cd backend && pytest -v
 - [x] Relationship type picker in drag-to-connect flow
 - [x] Undo/redo for graph editing operations
 - [x] Import existing ontology files (.ttl, .owl, .rdf, .jsonld)
+- [x] Semantic diff between ontology versions (git-style diff)
+- [x] Compatibility checks for breaking changes (schema-registry style)
 - [ ] SHACL violation visualization in graph editor
-- [ ] Ontology CI / agent-behavior dry-run (git-style diff, schema-registry compatibility checks, dry-run replay)
+- [ ] Dry-run replay of agent tasks against ontology changes
+- [ ] SPARQL query endpoint
 - [ ] Collaborative editing
 - [ ] Authentication and authorization (OAuth 2.0 / OIDC)
 

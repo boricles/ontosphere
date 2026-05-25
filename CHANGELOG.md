@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-05-25
+
+### Added
+
+- Semantic diff between ontology versions — compare any two versions to see added, removed, and modified classes and relationships with colored visual indicators.
+- Compatibility checks — automatic detection of breaking changes when comparing versions: orphaned edges, broken class hierarchies, relationship type changes, high-impact removals, and domain/range violations; displayed as error/warning banners in the diff view.
+- Version comparison UI — checkbox selection in Version History to pick two versions and compare them.
+
+### Fixed
+
+- Relationship type validation was too restrictive — now accepts any valid relationship type including DISJOINT_WITH and custom types; fixed RELATED_TO/RELATES_TO naming mismatch across backend services.
+- Frontend stuck on "Processing complete" overlay after ontology generation — added HTTP polling fallback to detect completion when WebSocket is unavailable.
+- Drag-to-connect not working on newly added nodes until edit mode toggled — edgehandles now re-initializes automatically when graph data changes.
+- Added owl:disjointWith support in RDF import, export, diff, and version rollback.
+
+### Changed
+
+- Removed restrictive relationship type whitelist — any alphanumeric relationship type is now accepted after sanitization.
+- LLM prompt updated to include RELATED_TO and DISJOINT_WITH as relationship types.
+
 ## [0.3.0] - 2026-05-24
 
 ### Added
